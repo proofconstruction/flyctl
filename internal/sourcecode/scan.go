@@ -2,11 +2,12 @@ package sourcecode
 
 import (
 	"embed"
+	"encoding/base64"
 	"fmt"
 	"io/fs"
 	"io/ioutil"
+	"os/exec"
 	"path/filepath"
-	"regexp"
 
 	"github.com/pkg/errors"
 	"github.com/superfly/flyctl/helpers"
@@ -26,8 +27,9 @@ type Secret struct {
 	Key      string
 	Help     string
 	Value    string
-	Generate bool
+	Generate func() (string, error)
 }
+
 type SourceInfo struct {
 	Family                       string
 	Version                      string
@@ -88,6 +90,7 @@ func Scan(sourceDir string) (*SourceInfo, error) {
 		configureDeno,
 		configureRemix,
 		configureNuxt,
+		configureNextJs,
 		configureNode,
 		configureStatic,
 	}
@@ -137,9 +140,11 @@ func configureLucky(sourceDir string) (*SourceInfo, error) {
 		},
 		Secrets: []Secret{
 			{
-				Key:      "SECRET_KEY_BASE",
-				Help:     "Lucky needs a random, secret key. Use the random default we've generated, or generate your own.",
-				Generate: true,
+				Key:  "SECRET_KEY_BASE",
+				Help: "Lucky needs a random, secret key. Use the random default we've generated, or generate your own.",
+				Generate: func() (string, error) {
+					return helpers.RandString(64)
+				},
 			},
 			{
 				Key:   "SEND_GRID_KEY",
@@ -367,9 +372,11 @@ func configurePhoenix(sourceDir string) (*SourceInfo, error) {
 		Family: "Phoenix",
 		Secrets: []Secret{
 			{
-				Key:      "SECRET_KEY_BASE",
-				Help:     "Phoenix needs a random, secret key. Use the random default we've generated, or generate your own.",
-				Generate: true,
+				Key:  "SECRET_KEY_BASE",
+				Help: "Phoenix needs a random, secret key. Use the random default we've generated, or generate your own.",
+				Generate: func() (string, error) {
+					return helpers.RandString(64)
+				},
 			},
 		},
 		KillSignal: "SIGTERM",
@@ -401,8 +408,10 @@ func configurePhoenix(sourceDir string) (*SourceInfo, error) {
 		},
 	}
 
-	// We found Phoenix 1.6.3 or higher, so try running the Docker generator
-	if checksPass(sourceDir, dirContains("mix.exs", "phoenix.*"+regexp.QuoteMeta("1.6"))) {
+	// We found Phoenix, so check if the Docker generator is present
+	cmd := exec.Command("mix", "help", "phx.gen.release")
+	err := cmd.Run()
+	if err == nil {
 		s.DeployDocs = `
 Your Phoenix app should be ready for deployment!.
 
@@ -410,9 +419,7 @@ If you need something else, post on our community forum at https://community.fly
 
 When you're ready to deploy, use 'fly deploy --remote-only'.
 `
-	}
-	// We found Phoenix 1.6.0 - 1.6.2
-	if checksPass(sourceDir, dirContains("mix.exs", "phoenix.*"+regexp.QuoteMeta("1.6.")+"[0-2][^\\d]")) {
+	} else {
 		s.SkipDeploy = true
 		s.DeployDocs = `
 We recommend upgrading to Phoenix 1.6.3 which includes a release configuration for Docker-based deployment.
@@ -540,6 +547,31 @@ func configureNuxt(sourceDir string) (*SourceInfo, error) {
 	return s, nil
 }
 
+func configureNextJs(sourceDir string) (*SourceInfo, error) {
+	if !checksPass(sourceDir, fileExists("next.config.js")) && !checksPass(sourceDir, dirContains("package.json", "\"next\"")) {
+		return nil, nil
+	}
+
+	env := map[string]string{
+		"PORT": "8080",
+	}
+
+	s := &SourceInfo{
+		Family: "NextJS",
+		Port:   8080,
+		SkipDatabase: true,
+	}
+	
+	s.Files = templates("templates/nextjs")
+
+	s.BuildArgs = map[string]string{
+		"NEXT_PUBLIC_EXAMPLE": "Value goes here",
+	}
+
+	s.Env = env
+	return s, nil
+}
+
 // setup django with a postgres database
 func configureDjango(sourceDir string) (*SourceInfo, error) {
 	if !checksPass(sourceDir, fileExists("requirements.txt", "manage.py")) {
@@ -555,9 +587,11 @@ func configureDjango(sourceDir string) (*SourceInfo, error) {
 		},
 		Secrets: []Secret{
 			{
-				Key:      "SECRET_KEY",
-				Help:     "Django needs a random, secret key. Use the random default we've generated, or generate your own.",
-				Generate: true,
+				Key:  "SECRET_KEY",
+				Help: "Django needs a random, secret key. Use the random default we've generated, or generate your own.",
+				Generate: func() (string, error) {
+					return helpers.RandString(64)
+				},
 			},
 		},
 		Statics: []Static{
@@ -625,9 +659,10 @@ func configureLaravel(sourceDir string) (*SourceInfo, error) {
 
 	s := &SourceInfo{
 		Env: map[string]string{
-			"APP_ENV":     "production",
-			"LOG_CHANNEL": "stderr",
-			"LOG_LEVEL":   "info",
+			"APP_ENV":              "production",
+			"LOG_CHANNEL":          "stderr",
+			"LOG_LEVEL":            "info",
+			"LOG_STDERR_FORMATTER": "Monolog\\Formatter\\JsonFormatter",
 		},
 		Family: "Laravel",
 		Files:  files,
@@ -635,8 +670,12 @@ func configureLaravel(sourceDir string) (*SourceInfo, error) {
 		Secrets: []Secret{
 			{
 				Key:  "APP_KEY",
-				Help: "Laravel needs a unique application key. Use 'php artisan key:generate --show' to generate this value.",
-				// TODO: Can we generate this for users?
+				Help: "Laravel needs a unique application key.",
+				Generate: func() (string, error) {
+					// Method used in RandBytes never returns an error
+					r, _ := helpers.RandBytes(32)
+					return "base64:" + base64.StdEncoding.EncodeToString(r), nil
+				},
 			},
 		},
 		SkipDatabase: true,

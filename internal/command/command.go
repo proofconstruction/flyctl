@@ -15,14 +15,14 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/superfly/flyctl/api"
-	"github.com/superfly/flyctl/pkg/iostreams"
+	"github.com/superfly/flyctl/iostreams"
 
+	"github.com/superfly/flyctl/client"
 	"github.com/superfly/flyctl/internal/buildinfo"
-	"github.com/superfly/flyctl/internal/client"
 	"github.com/superfly/flyctl/internal/config"
 	"github.com/superfly/flyctl/internal/env"
-	"github.com/superfly/flyctl/internal/logger"
 	"github.com/superfly/flyctl/internal/update"
+	"github.com/superfly/flyctl/logger"
 
 	"github.com/superfly/flyctl/internal/app"
 	"github.com/superfly/flyctl/internal/cache"
@@ -444,7 +444,7 @@ func LoadAppConfigIfPresent(ctx context.Context) (context.Context, error) {
 	logger := logger.FromContext(ctx)
 
 	for _, path := range appConfigFilePaths(ctx) {
-		switch cfg, err := app.LoadConfig(path); {
+		switch cfg, err := app.LoadConfig(ctx, path, ""); {
 		case err == nil:
 			logger.Debugf("app config loaded from %s", path)
 

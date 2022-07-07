@@ -15,12 +15,12 @@ import (
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 	"github.com/superfly/flyctl/api"
+	"github.com/superfly/flyctl/client"
 	"github.com/superfly/flyctl/cmdctx"
 	"github.com/superfly/flyctl/docstrings"
 	"github.com/superfly/flyctl/flyctl"
 	"github.com/superfly/flyctl/helpers"
 	"github.com/superfly/flyctl/internal/build/imgsrc"
-	"github.com/superfly/flyctl/internal/client"
 	"github.com/superfly/flyctl/internal/filemu"
 	"github.com/superfly/flyctl/internal/sourcecode"
 	"github.com/superfly/graphql"
@@ -236,7 +236,7 @@ func runLaunch(cmdCtx *cmdctx.CmdContext) error {
 		}
 	}
 
-	org, err := selectOrganization(ctx, cmdCtx.Client.API(), orgSlug, nil)
+	org, err := selectOrganization(ctx, cmdCtx.Client.API(), orgSlug)
 	if err != nil {
 		return err
 	}
@@ -325,8 +325,8 @@ func runLaunch(cmdCtx *cmdctx.CmdContext) error {
 
 			// If a secret should be a random default, just generate it without displaying
 			// Otherwise, prompt to type it in
-			if secret.Generate {
-				if val, err = helpers.RandString(64); err != nil {
+			if secret.Generate != nil {
+				if val, err = secret.Generate(); err != nil {
 					return fmt.Errorf("could not generate random string: %w", err)
 				}
 

@@ -10,7 +10,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/spf13/cobra"
 
-	"github.com/superfly/flyctl/pkg/iostreams"
+	"github.com/superfly/flyctl/iostreams"
 
 	"github.com/superfly/flyctl/api"
 	"github.com/superfly/flyctl/internal/app"
@@ -20,10 +20,10 @@ import (
 	"github.com/superfly/flyctl/internal/render"
 	"github.com/superfly/flyctl/internal/state"
 
-	"github.com/superfly/flyctl/internal/client"
+	"github.com/superfly/flyctl/client"
 	"github.com/superfly/flyctl/internal/cmdutil"
-	"github.com/superfly/flyctl/internal/logger"
 	"github.com/superfly/flyctl/internal/watch"
+	"github.com/superfly/flyctl/logger"
 )
 
 func New() (cmd *cobra.Command) {
@@ -105,7 +105,7 @@ func DeployWithConfig(ctx context.Context, appConfig *app.Config) (err error) {
 	var release *api.Release
 	var releaseCommand *api.ReleaseCommand
 
-	if appConfig.PlatformVersion >= app.MachinesVersion {
+	if appConfig.ForMachines() {
 		return createMachinesRelease(ctx, appConfig, img)
 	} else {
 		release, releaseCommand, err = createRelease(ctx, appConfig, img)
@@ -163,13 +163,21 @@ func determineAppConfig(ctx context.Context) (cfg *app.Config, err error) {
 		var apiConfig *api.AppConfig
 		if apiConfig, err = client.GetConfig(ctx, app.NameFromContext(ctx)); err != nil {
 			err = fmt.Errorf("failed fetching existing app config: %w", err)
-
 			return
+		}
+
+		basicApp, err := client.GetAppBasic(ctx, app.NameFromContext(ctx))
+
+		if err != nil {
+			return nil, err
 		}
 
 		cfg = &app.Config{
 			Definition: apiConfig.Definition,
 		}
+
+		cfg.AppName = basicApp.Name
+		cfg.SetPlatformVersion(basicApp.PlatformVersion)
 	}
 
 	if env := flag.GetStringSlice(ctx, "env"); len(env) > 0 {

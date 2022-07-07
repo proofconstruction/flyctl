@@ -12,16 +12,16 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/superfly/flyctl/api"
-	"github.com/superfly/flyctl/pkg/iostreams"
-	"github.com/superfly/flyctl/pkg/logs"
+	"github.com/superfly/flyctl/iostreams"
+	"github.com/superfly/flyctl/logs"
 
+	"github.com/superfly/flyctl/client"
 	"github.com/superfly/flyctl/internal/app"
-	"github.com/superfly/flyctl/internal/client"
 	"github.com/superfly/flyctl/internal/command"
 	"github.com/superfly/flyctl/internal/config"
 	"github.com/superfly/flyctl/internal/flag"
-	"github.com/superfly/flyctl/internal/logger"
 	"github.com/superfly/flyctl/internal/render"
+	"github.com/superfly/flyctl/logger"
 )
 
 func New() (cmd *cobra.Command) {

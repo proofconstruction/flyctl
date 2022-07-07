@@ -18,9 +18,9 @@ import (
 	"github.com/superfly/flyctl/api"
 	"github.com/superfly/flyctl/helpers"
 
+	"github.com/superfly/flyctl/client"
 	"github.com/superfly/flyctl/internal/app"
 	"github.com/superfly/flyctl/internal/build/imgsrc"
-	"github.com/superfly/flyctl/internal/client"
 	"github.com/superfly/flyctl/internal/command"
 	"github.com/superfly/flyctl/internal/command/apps"
 	"github.com/superfly/flyctl/internal/command/deploy"
@@ -28,7 +28,7 @@ import (
 	"github.com/superfly/flyctl/internal/flag"
 	"github.com/superfly/flyctl/internal/prompt"
 	"github.com/superfly/flyctl/internal/sourcecode"
-	"github.com/superfly/flyctl/pkg/iostreams"
+	"github.com/superfly/flyctl/iostreams"
 )
 
 func newLaunch() (cmd *cobra.Command) {
@@ -97,7 +97,7 @@ func run(ctx context.Context) (err error) {
 	}
 
 	// Prompt for an org
-	org, err := prompt.Org(ctx, nil)
+	org, err := prompt.Org(ctx)
 
 	if err != nil {
 		return
@@ -132,13 +132,8 @@ func run(ctx context.Context) (err error) {
 	appConfig := app.NewConfig()
 
 	// Config version 2 is for machine apps
-	appConfig.PlatformVersion = app.MachinesVersion
+	appConfig.SetMachinesPlatform()
 	appConfig.AppName = createdApp.Name
-
-	appConfig.VM = &app.VM{
-		CpuCount: 1,
-		Memory:   256,
-	}
 
 	// Launch in the specified region, or when not specified, in the nearest region
 	regionCode := flag.GetString(ctx, "region")
@@ -153,7 +148,7 @@ func run(ctx context.Context) (err error) {
 		regionCode = region.Code
 	}
 
-	appConfig.PrimaryRegion = regionCode
+	appConfig.SetPrimaryRegion(regionCode)
 
 	var srcInfo *sourcecode.SourceInfo
 
@@ -338,8 +333,8 @@ func setScannerPrefs(ctx context.Context, appConfig *app.Config, srcInfo *source
 
 			// If a secret should be a random default, just generate it without displaying
 			// Otherwise, prompt to type it in
-			if secret.Generate {
-				if val, err = helpers.RandString(64); err != nil {
+			if secret.Generate != nil {
+				if val, err = secret.Generate(); err != nil {
 					return fmt.Errorf("could not generate random string: %w", err)
 				}
 
@@ -383,10 +378,11 @@ func setScannerPrefs(ctx context.Context, appConfig *app.Config, srcInfo *source
 				return err
 			}
 
+			region := appConfig.GetPrimaryRegion()
 			volume, err := client.CreateVolume(ctx, api.CreateVolumeInput{
 				AppID:     appID,
 				Name:      vol.Source,
-				Region:    appConfig.PrimaryRegion,
+				Region:    region,
 				SizeGb:    1,
 				Encrypted: true,
 			})
@@ -394,7 +390,7 @@ func setScannerPrefs(ctx context.Context, appConfig *app.Config, srcInfo *source
 			if err != nil {
 				return err
 			} else {
-				fmt.Printf("Created a %dGB volume %s in the %s region\n", volume.SizeGb, volume.ID, appConfig.PrimaryRegion)
+				fmt.Printf("Created a %dGB volume %s in the %s region\n", volume.SizeGb, volume.ID, region)
 			}
 
 		}
